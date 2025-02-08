@@ -1,0 +1,87 @@
+version: '3'
+services:
+  # PHP App
+  app:
+    build:
+      context: .
+      dockerfile: config/dockerfile
+    image: christexe/php:8.2.8-fpm-bullseye
+    container_name: '${serverName}_App'
+    restart: unless-stopped
+    tty: true
+    environment:
+      SERVICE_NAME: app
+      SERVICE_TAGS: dev
+      DB_MSSQL_HOST: DB_MSSQL_${serverName}
+      DB_MSSQL_NAME: ${databaseMSSQL}
+      DB_MSSQL_USERNAME: ${usernameMSSQL}
+      DB_MSSQL_PASSWORD: ${passwordMSSQL}
+      DB_MYSQL_HOST: DB_MYSQL_${serverName}
+      DB_MYSQL_NAME: ${databaseMySQL}
+      DB_MYSQL_USERNAME: ${usernameMySQL}
+      DB_MYSQL_PASSWORD: ${passwordMySQL}
+      DB_POSTGRES_HOST: DB_POSTGRES_${serverName}
+      DB_POSTGRES_NAME: ${databasePostgres}
+      DB_POSTGRES_USERNAME: ${usernamePostgres}
+      DB_POSTGRES_PASSWORD: ${passwordPostgres}
+    working_dir: /var/www/html
+    volumes:
+      - ${pathApp}:/var/www/html/
+      - ./config/uploads.ini:/usr/local/etc/php/conf.d/uploads.ini
+
+  # Nginx Service
+  nginx:
+    image: nginx:1.24
+    container_name: '${serverName}_server'
+    restart: unless-stopped
+    tty: true
+    ports:
+      - ${port}:80
+    volumes:
+      - ${pathApp}:/var/www/html/
+      - ./config/conf.d/:/etc/nginx/conf.d/
+
+  # SQL Server Service
+  sql-server-db:
+    container_name: 'DB_MSSQL_${serverName}'
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    ports:
+      - "1433:1433"
+    environment:
+      SA_PASSWORD: "${passwordMSSQL}"
+      ACCEPT_EULA: "Y"
+    volumes:
+      - mssql_data:/var/opt/mssql
+
+  # MySQL Service
+  mysql:
+    container_name: DB_MYSQL_${serverName}
+    image: mysql:8.1
+    command: mysqld --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: "${passwordRootMySQL}"
+      MYSQL_DATABASE: ${databaseMySQL}
+      MYSQL_USER: ${usernameMySQL}
+      MYSQL_PASSWORD: ${passwordMySQL}
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+  # PostgreSQL Service
+  postgres:
+    container_name: 'DB_POSTGRES_${serverName}'
+    image: postgres:16
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: ${databasePostgres}
+      POSTGRES_USER: ${usernamePostgres}
+      POSTGRES_PASSWORD: ${passwordPostgres}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  mysql_data:
+  mssql_data:
+  postgres_data:

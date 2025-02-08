@@ -1,0 +1,50 @@
+# Set master image
+FROM php:8.2.8-fpm-bullseye
+
+# Set working directory
+WORKDIR /var/www/html
+
+ENV ACCEPT_EULA=Y
+
+# Install Xdebug
+RUN pecl install xdebug \
+    && docker-php-ext-enable xdebug
+COPY ./config/xdebug/docker-php-ext-xdebug.ini /usr/local/etc/php/conf.d/
+
+# Install prerequisites
+RUN apt-get update \
+    && apt-get install -y apt-transport-https gnupg2 unzip curl git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install MSSQL prerequisites
+RUN curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add - \
+    && curl https://packages.microsoft.com/config/debian/11/prod.list > /etc/apt/sources.list.d/mssql-release.list \
+    && apt-get update \
+    && apt-get install -y msodbcsql17 unixodbc-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Retrieve PHP extension installer
+COPY --from=mlocati/php-extension-installer /usr/bin/install-php-extensions /usr/bin/install-php-extensions
+
+# Install required PHP extensions
+RUN chmod uga+x /usr/bin/install-php-extensions \
+    && sync \
+    && install-php-extensions pdo pdo_mysql pdo_pgsql pdo_sqlsrv
+
+ENV MSSQL_TRUSTED_CERTIFICATES=/etc/ssl/private/mssql.pem
+
+# Install PHP Composer
+RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+
+# Add UID '1000' to www-data
+RUN usermod -u 1000 www-data
+
+# Copy existing application directory permissions
+COPY --chown=www-data:www-data . /var/www/html
+
+# Change current user to www-data
+USER www-data
+
+# Expose port 9000 and start php-fpm server
+EXPOSE 9000
+CMD ["php-fpm"]
